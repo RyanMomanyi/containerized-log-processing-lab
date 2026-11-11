@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-lab}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lab}
+      POSTGRES_DB: ${POSTGRES_DB:-logs}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      retries: 15
+  ingestion:
+    build: .
+    command: ["python", "-m", "app.ingest"]
+    environment:
+      LOG_FILE: /data/application.jsonl
+      QUEUE_DIR: /data/queue
+    volumes: [./data:/data]
+  worker:
+    build: .
+    command: ["python", "-m", "app.worker"]
+    environment:
+      QUEUE_DIR: /data/queue
+      DATABASE_URL: postgresql://${POSTGRES_USER:-lab}:${POSTGRES_PASSWORD:-lab}@db:5432/${POSTGRES_DB:-logs}
+    volumes: [./data:/data]
+    depends_on:
+      db: {condition: service_healthy}
+volumes:
+  pgdata:
